@@ -210,7 +210,7 @@ def run_sample(task_id, output_dir, seed, mode):
         return
 
     n_asm, shape, family_id = get_config(task_id)
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(seed + task_id)
     enrichment_map = sample_enrichment(rng, n_asm)
 
     materials, fuel_map, water, zircaloy = make_materials(enrichment_map)
