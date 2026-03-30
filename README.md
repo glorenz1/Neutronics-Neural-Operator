@@ -19,3 +19,9 @@ so that new reactor configurations can be evaluated in milliseconds without reru
 4. Predict:
    - full 2D neutron flux field
    - effective multiplication factor (k_eff)
+   
+## Results
+
+![Enrichment prediction](images/main_result.png)
+
+Example of enrichment prediction compared to OpenMC ground truth, along with the corresponding absolute error.
