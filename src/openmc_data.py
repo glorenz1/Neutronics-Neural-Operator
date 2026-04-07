@@ -47,7 +47,7 @@ def sample_enrichment(rng, n_asm):
             emap[r0:r0 + PINS_PER_ASM, c0:c0 + PINS_PER_ASM] = np.clip(
                 base + pert, ENRICH_MIN, ENRICH_MAX
             )
-    return np.round(emap, 3)
+    return emap
 
 
 def make_materials(enrichment_map):
