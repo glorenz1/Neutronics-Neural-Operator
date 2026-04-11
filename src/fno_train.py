@@ -17,11 +17,11 @@ print(f"PyTorch using {n_threads} threads")
 
 MAX_CELLS = 85
 N_IN = 3  # channels: enrich, coord_xn, coord_yn
-MODES = 24
-WIDTH = 64
-DEPTH = 4
+MODES = 12
+WIDTH = 32
+DEPTH = 3
 PAD = 4
-LOG = 10
+LOG = 5
 
 
 # center pad a 2D array with zeros to (target x target)
@@ -202,16 +202,16 @@ def evaluate_model(model, loader):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", required=True, help="Path to samples folder")
-    parser.add_argument("--epochs", type=int, default=600)
+    parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch", type=int, default=16)
     args = parser.parse_args()
     samples_dir = args.data
     n_epochs = args.epochs
     batch_size = args.batch
-    checkpoint_path = "fno_openmc_trained.pt"
-    best_checkpoint_path = "fno_openmc_best.pt"
+    checkpoint_path = "fno_trained.pt"
+    best_checkpoint_path = "fno_best.pt"
 
-    val_frac = 0.1
+    val_frac = 0.15
     split_seed = 42
 
     x, yp, yk, masks = load_dataset(samples_dir)
@@ -251,7 +251,7 @@ if __name__ == "__main__":
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=(device.type == "cuda")) if val_ds is not None else None
 
     model = FNO2d(modes=MODES, width=WIDTH, depth=DEPTH, pad=PAD, n_in=N_IN).to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-5)
+    opt = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=n_epochs, eta_min=5e-5)
 
     history = {
@@ -267,6 +267,10 @@ if __name__ == "__main__":
     }
 
     best_val_loss = float("inf")
+    best_epoch = 0
+    patience = 4
+    min_delta = 1e-4
+    null_epochs = 0
 
     for epoch in range(1, n_epochs + 1):
         model.train()
@@ -283,8 +287,9 @@ if __name__ == "__main__":
             loss_flux = masked_rel_l2(pred_phi, flux_batch, mask_batch)
             flux_rel, k_rel, k_mse = batch_metrics(pred_phi, flux_batch, pred_k, keff_batch, mask_batch)
             # flux relative L2 + weighted keff MSE
-            loss = loss_flux + 10 * k_mse
+            loss = loss_flux + 3 * k_mse
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1) # gradient clipping
             opt.step()
 
             running_flux += loss_flux.item()
@@ -320,8 +325,11 @@ if __name__ == "__main__":
                     f"Epoch {epoch:3d} | train flux={train_stats['flux_loss']:.4f} | val flux={val_stats['flux_loss']:.4f} | "
                     f"train krel={train_stats['k_rel_err']:.4e} | val krel={val_stats['k_rel_err']:.4e} | LR={sched.get_last_lr()[0]:.2e}"
                 )
-                if val_stats["total_loss"] < best_val_loss:
+                if val_stats["total_loss"] < best_val_loss - min_delta:
                     best_val_loss = val_stats["total_loss"]
+                    best_epoch = epoch
+                    null_epochs = 0
+
                     torch.save(
                         {
                             "model_state": model.state_dict(),
@@ -343,6 +351,14 @@ if __name__ == "__main__":
                         best_checkpoint_path,
                     )
                     print(f"  -> New best val loss {best_val_loss:.4f} at epoch {epoch}; saved to {best_checkpoint_path}")
+                else:
+                    null_epochs += 1
+                    print(f"  -> No val improvement for {null_epochs}/{patience} checks")
+
+                if null_epochs >= patience:
+                    print(f"Early stopping at epoch {epoch}. Best epoch was {best_epoch} with val loss {best_val_loss:.4f}")
+                    break
+
             else:
                 history["val_flux_loss"].append(None)
                 history["val_total_loss"].append(None)
@@ -373,6 +389,11 @@ if __name__ == "__main__":
         checkpoint_path,
     )
     print(f"Model saved to {checkpoint_path}")
+
+    if os.path.exists(best_checkpoint_path):
+        best_ckpt = torch.load(best_checkpoint_path, map_location=device, weights_only=False)
+        model.load_state_dict(best_ckpt["model_state"])
+        print(f"Loaded best model from epoch {best_ckpt['best_epoch']}")
 
     train_stats = evaluate_model(model, train_loader)
     print(f"\nTrain relative flux error : {train_stats['flux_rel_err']:.4f}")
