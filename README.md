@@ -22,6 +22,6 @@ so that new reactor configurations can be evaluated in milliseconds without reru
    
 ## Results
 
-![Enrichment prediction](images/main_result.png)
+![Enrichment prediction](plots/main_result.png)
 
 Example of enrichment prediction compared to OpenMC ground truth, along with the corresponding absolute error.
