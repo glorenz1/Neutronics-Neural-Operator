@@ -285,7 +285,9 @@ if __name__ == "__main__":
     true_phi = yp[plot_idx]
     pred_phi = pred_phi[0].cpu().numpy()
     abs_err = np.abs(pred_phi - true_phi)
-    rel_err = abs_err / (np.abs(true_phi) + 1e-8)
+    rel_err = np.full_like(true_phi, np.nan)
+    mask_rel = (mask > 0.5) & (np.abs(true_phi) > 1e-3)
+    rel_err[mask_rel] = abs_err[mask_rel] / np.abs(true_phi[mask_rel])
 
     enrich_c = crop(enrich, mask)
     true_phi_c = crop(true_phi, mask)
