@@ -1,0 +1,13 @@
+# conda env create -f nno.yml
+name: nno
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.12
+  - numpy
+  - matplotlib
+  - openmc
+  - pytorch
+  - h5py
